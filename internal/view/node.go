@@ -83,12 +83,30 @@ func (n *Node) bindKeys(aa *ui.KeyActions) {
 	}
 
 	aa.Bulk(ui.KeyMap{
-		ui.KeyY:      ui.NewKeyAction(yamlAction, n.yamlCmd, true),
-		ui.KeyShiftR: ui.NewKeyAction("Sort ROLE", n.GetTable().SortColCmd("ROLE", true), false),
+		ui.KeyY: ui.NewKeyAction(yamlAction, n.yamlCmd, true),
+		ui.KeyQ: ui.NewKeyAction("Copy Node Name", n.copyNodeName, true),
+		// ui.KeyShiftR: ui.NewKeyAction("Sort ROLE", n.GetTable().SortColCmd("ROLE", true), false),
+		ui.KeyShiftZ: ui.NewKeyAction("Sort ZONE", n.GetTable().SortColCmd("ZONE", true), false),
+		ui.KeyShiftV: ui.NewKeyAction("Sort GEN", n.GetTable().SortColCmd("GEN", true), false),
 		ui.KeyShiftC: ui.NewKeyAction("Sort CPU", n.GetTable().SortColCmd(cpuCol, false), false),
 		ui.KeyShiftM: ui.NewKeyAction("Sort MEM", n.GetTable().SortColCmd(memCol, false), false),
-		ui.KeyShiftO: ui.NewKeyAction("Sort Pods", n.GetTable().SortColCmd("PODS", false), false),
+		ui.KeyShiftP: ui.NewKeyAction("Sort Pods", n.GetTable().SortColCmd("PODS", false), false),
 	})
+}
+
+func (n *Node) copyNodeName(evt *tcell.EventKey) *tcell.EventKey {
+	path := n.GetTable().GetSelectedItem()
+	if path == "" {
+		return evt
+	}
+
+	if err := clipboardWrite(path); err != nil {
+		n.App().Flash().Err(err)
+		return nil
+	}
+
+	n.App().Flash().Info("Node name copied to clipboard...")
+	return nil
 }
 
 func (n *Node) showPods(a *App, _ ui.Tabular, _ *client.GVR, path string) {

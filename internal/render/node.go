@@ -24,14 +24,18 @@ import (
 )
 
 const (
-	labelNodeRolePrefix = "node-role.kubernetes.io/"
-	labelNodeRoleSuffix = "kubernetes.io/role"
+	labelNodeRolePrefix   = "node-role.kubernetes.io/"
+	labelNodeRoleSuffix   = "kubernetes.io/role"
+	labelNodeZone         = "topology.kubernetes.io/zone"
+	labelNodeInstanceType = "node.kubernetes.io/instance-type"
 )
 
 var defaultNOHeader = model1.Header{
 	model1.HeaderColumn{Name: "NAME"},
 	model1.HeaderColumn{Name: "STATUS"},
-	model1.HeaderColumn{Name: "ROLE"},
+	// model1.HeaderColumn{Name: "ROLE"},
+	model1.HeaderColumn{Name: "ZONE"},
+	model1.HeaderColumn{Name: "GEN"},
 	model1.HeaderColumn{Name: "ARCH", Attrs: model1.Attrs{Wide: true}},
 	model1.HeaderColumn{Name: "TAINTS"},
 	model1.HeaderColumn{Name: "VERSION"},
@@ -46,8 +50,8 @@ var defaultNOHeader = model1.Header{
 	model1.HeaderColumn{Name: "MEM", Attrs: model1.Attrs{Align: tview.AlignRight, MX: true}},
 	model1.HeaderColumn{Name: "MEM/A", Attrs: model1.Attrs{Align: tview.AlignRight, MX: true}},
 	model1.HeaderColumn{Name: "%MEM", Attrs: model1.Attrs{Align: tview.AlignRight, MX: true}},
-	model1.HeaderColumn{Name: "GPU/A", Attrs: model1.Attrs{Align: tview.AlignRight, MX: true}},
-	model1.HeaderColumn{Name: "GPU/C", Attrs: model1.Attrs{Align: tview.AlignRight, MX: true}},
+	// model1.HeaderColumn{Name: "GPU/A", Attrs: model1.Attrs{Align: tview.AlignRight, MX: true}},
+	// model1.HeaderColumn{Name: "GPU/C", Attrs: model1.Attrs{Align: tview.AlignRight, MX: true}},
 	model1.HeaderColumn{Name: "LABELS", Attrs: model1.Attrs{Wide: true}},
 	model1.HeaderColumn{Name: "VALID", Attrs: model1.Attrs{Wide: true}},
 	model1.HeaderColumn{Name: "AGE", Attrs: model1.Attrs{Time: true}},
@@ -101,9 +105,9 @@ func (n Node) defaultRow(nwm *NodeWithMetrics, r *model1.Row) error {
 	statuses := make(sort.StringSlice, 10)
 	status(no.Status.Conditions, no.Spec.Unschedulable, statuses)
 	sort.Sort(statuses)
-	roles := make(sort.StringSlice, 10)
-	nodeRoles(&no, roles)
-	sort.Sort(roles)
+	// roles := make(sort.StringSlice, 10)
+	// nodeRoles(&no, roles)
+	// sort.Sort(roles)
 
 	podCount := strconv.Itoa(nwm.PodCount)
 	if pc := nwm.PodCount; pc == -1 {
@@ -113,7 +117,9 @@ func (n Node) defaultRow(nwm *NodeWithMetrics, r *model1.Row) error {
 	r.Fields = model1.Fields{
 		no.Name,
 		join(statuses, ","),
-		join(roles, ","),
+		// join(roles, ","),
+		nodeZone(&no),
+		nodeInstanceType(&no),
 		no.Status.NodeInfo.Architecture,
 		strconv.Itoa(len(no.Spec.Taints)),
 		no.Status.NodeInfo.KubeletVersion,
@@ -128,8 +134,8 @@ func (n Node) defaultRow(nwm *NodeWithMetrics, r *model1.Row) error {
 		toMi(c.mem),
 		toMi(a.mem),
 		client.ToPercentageStr(c.mem, a.mem),
-		toMu(a.gpu),
-		toMu(c.gpu),
+		//toMu(a.gpu),
+		//toMu(c.gpu),
 		mapToStr(no.Labels),
 		AsStatus(n.diagnose(statuses)),
 		ToAge(no.GetCreationTimestamp()),
@@ -219,6 +225,24 @@ func gatherNodeMX(no *v1.Node, mx *mv1beta1.NodeMetrics) (c, a metric) {
 	c.gpu = extractGPU(no.Status.Capacity).Value()
 
 	return
+}
+
+func nodeZone(node *v1.Node) string {
+	for k, v := range node.Labels {
+		if k == labelNodeZone {
+			return v
+		}
+	}
+	return ""
+}
+
+func nodeInstanceType(node *v1.Node) string {
+	for k, v := range node.Labels {
+		if k == labelNodeInstanceType {
+			return v
+		}
+	}
+	return ""
 }
 
 func nodeRoles(node *v1.Node, res []string) {

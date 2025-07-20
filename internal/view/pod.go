@@ -136,6 +136,8 @@ func (p *Pod) bindKeys(aa *ui.KeyActions) {
 		ui.KeyShiftS: ui.NewKeyAction("Sort Status", p.GetTable().SortColCmd(statusCol, true), false),
 		ui.KeyShiftI: ui.NewKeyAction("Sort IP", p.GetTable().SortColCmd("IP", true), false),
 		ui.KeyShiftO: ui.NewKeyAction("Sort Node", p.GetTable().SortColCmd("NODE", true), false),
+		ui.KeyQ:      ui.NewKeyAction("Copy IP", p.copyIP, true),
+		ui.KeyShiftQ: ui.NewKeyAction("Copy Node Name", p.copyNodeName, true),
 	})
 	aa.Merge(resourceSorters(p.GetTable()))
 }
@@ -167,6 +169,60 @@ func (p *Pod) coContext(ctx context.Context) context.Context {
 }
 
 // Handlers...
+
+func (p *Pod) copyIP(evt *tcell.EventKey) *tcell.EventKey {
+
+	path := p.GetTable().GetSelectedItem()
+	if path == "" {
+		return evt
+	}
+
+	pod, err := fetchPod(p.App().factory, path)
+	if err != nil {
+		p.App().Flash().Err(err)
+		return nil
+	}
+
+	if pod.Status.PodIP == "" {
+		p.App().Flash().Warn("Pod doesn't have an IP assigned yet...")
+		return nil
+	}
+
+	if err := clipboardWrite(pod.Status.PodIP); err != nil {
+		p.App().Flash().Err(err)
+		return nil
+	}
+
+	p.App().Flash().Info("Pod IP copied to clipboard...")
+	return nil
+}
+
+func (p *Pod) copyNodeName(evt *tcell.EventKey) *tcell.EventKey {
+
+	path := p.GetTable().GetSelectedItem()
+	if path == "" {
+		return evt
+	}
+
+	pod, err := fetchPod(p.App().factory, path)
+	if err != nil {
+		p.App().Flash().Err(err)
+		return nil
+	}
+
+	if pod.Spec.NodeName == "" {
+		p.App().Flash().Warn("Pod isn't scheduled to a node yet..")
+		return nil
+	}
+
+	if err := clipboardWrite(pod.Spec.NodeName); err != nil {
+		p.App().Flash().Err(err)
+		return nil
+	}
+
+	p.App().Flash().Info("Node name copied to clipboard...")
+	return nil
+}
 
 func (p *Pod) showNode(evt *tcell.EventKey) *tcell.EventKey {
 	path := p.GetTable().GetSelectedItem()

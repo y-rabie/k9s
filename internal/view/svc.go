@@ -53,7 +53,101 @@ func (s *Service) bindKeys(aa *ui.KeyActions) {
 	aa.Bulk(ui.KeyMap{
 		ui.KeyB:      ui.NewKeyAction("Bench Run/Stop", s.toggleBenchCmd, true),
 		ui.KeyShiftT: ui.NewKeyAction("Sort Type", s.GetTable().SortColCmd("TYPE", true), false),
+		ui.KeyQ:      ui.NewKeyAction("Copy ClusterIP", s.copyClusterIP, true),
+		ui.KeyShiftQ: ui.NewKeyAction("Copy External Addresses", s.copyExternalAddresses, true),
 	})
+}
+
+func lbIngressIP(s v1.LoadBalancerStatus) string {
+	ingress := s.Ingress
+	result := []string{}
+	for i := range ingress {
+		if ingress[i].IP != "" {
+			result = append(result, ingress[i].IP)
+		} else if ingress[i].Hostname != "" {
+			result = append(result, ingress[i].Hostname)
+		}
+	}
+
+	return strings.Join(result, ",")
+}
+
+func getSvcExtIPS(svc *v1.Service) []string {
+	results := []string{}
+
+	switch svc.Spec.Type {
+	case v1.ServiceTypeNodePort, v1.ServiceTypeClusterIP:
+		return svc.Spec.ExternalIPs
+	case v1.ServiceTypeLoadBalancer:
+		lbIps := lbIngressIP(svc.Status.LoadBalancer)
+		if len(svc.Spec.ExternalIPs) > 0 {
+			if lbIps != "" {
+				results = append(results, lbIps)
+			}
+			return append(results, svc.Spec.ExternalIPs...)
+		}
+		if lbIps != "" {
+			results = append(results, lbIps)
+		}
+	case v1.ServiceTypeExternalName:
+		results = append(results, svc.Spec.ExternalName)
+	}
+
+	return results
+}
+
+func (s *Service) copyClusterIP(evt *tcell.EventKey) *tcell.EventKey {
+	path := s.GetTable().GetSelectedItem()
+	if path == "" {
+		return evt
+	}
+
+	svc, err := fetchService(s.App().factory, path)
+	if err != nil {
+		s.App().Flash().Err(err)
+		return nil
+	}
+
+	if svc.Spec.ClusterIP == "" {
+		s.App().Flash().Warn("Service has ClusterIP To Copy")
+		return nil
+	}
+
+	if err := clipboardWrite(svc.Spec.ClusterIP); err != nil {
+		s.App().Flash().Err(err)
+		return nil
+	}
+
+	s.App().Flash().Info("ClusterIP copied to clipboard...")
+	return nil
+}
+
+func (s *Service) copyExternalAddresses(evt *tcell.EventKey) *tcell.EventKey {
+
+	path := s.GetTable().GetSelectedItem()
+	if path == "" {
+		return evt
+	}
+
+	svc, err := fetchService(s.App().factory, path)
+	if err != nil {
+		s.App().Flash().Err(err)
+		return nil
+	}
+
+	ips := getSvcExtIPS(svc)
+	if len(ips) == 0 {
+		s.App().Flash().Warn("Service has no External Addresses/IPs To Copy")
+		return nil
+	}
+
+	if err := clipboardWrite(strings.Join(ips, ",")); err != nil {
+		s.App().Flash().Err(err)
+		return nil
+	}
+
+	s.App().Flash().Info("External Addresses/IPs copied to clipboard...")
+	return nil
 }
 
 func (s *Service) showPods(a *App, _ ui.Tabular, _ *client.GVR, path string) {
